@@ -5,21 +5,24 @@ terraform {
     }
   }
 }
-
 provider "aws" {
-  region = "eu-west-2"
+  region = var.region
 }
 
+// compiles golang lambda
 resource "null_resource" "build" {
+  // re-builds if file hash changes
   triggers = {
     main    = base64sha256(file("${path.module}/src/main.go"))
     execute = base64sha256(file("${path.module}/build.sh"))
   }
+  // build script to run
   provisioner "local-exec" {
     command = "${path.module}/build.sh ${path.module}/src"
   }
 }
 
+// zips the lambda for aws deployment
 data "archive_file" "source" {
   type        = "zip"
   source_file = "${path.module}/main"
@@ -27,28 +30,26 @@ data "archive_file" "source" {
   depends_on  = [null_resource.build]
 }
 
+// lambda function role
 resource "aws_iam_role" "lambda" {
-  name = "iam_for_lambda"
+  name               = "iam_for_lambda"
+  assume_role_policy = data.aws_iam_policy_document.lambda.json
+}
 
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "lambda.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
+// assume lambda role (boilerplate code)
+data "aws_iam_policy_document" "lambda" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
     }
-  ]
-}
-EOF
+  }
 }
 
-resource "aws_lambda_function" "fhir" {
-  function_name = "fhir"
+// lambda for golang
+resource "aws_lambda_function" "lambda" {
+  function_name = "lambda"
 
   filename         = "${path.module}/lambda.zip"
   source_code_hash = data.archive_file.source.output_base64sha256
@@ -68,6 +69,10 @@ resource "aws_lambda_function" "fhir" {
   }
 
   lifecycle {
+    /*
+    You can override this using the command: 
+      `terraform taint aws_lambda_function.lambda`
+    */
     ignore_changes = [last_modified]
   }
 }
