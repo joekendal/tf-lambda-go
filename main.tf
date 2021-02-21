@@ -12,11 +12,11 @@ provider "aws" {
 
 resource "null_resource" "build" {
   triggers = {
-    main = base64sha256(file("${path.module}/main.go"))
+    main    = base64sha256(file("${path.module}/src/main.go"))
     execute = base64sha256(file("${path.module}/build.sh"))
   }
   provisioner "local-exec" {
-    command = "${path.module}/build.sh ${path.module}"
+    command = "${path.module}/build.sh ${path.module}/src"
   }
 }
 
@@ -63,7 +63,7 @@ resource "aws_lambda_function" "fhir" {
 
   environment {
     variables = {
-      HASH = base64sha256(file("main.go"))
+      HASH = base64sha256(file("src/main.go"))
     }
   }
 

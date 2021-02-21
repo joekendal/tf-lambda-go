@@ -1,4 +1,4 @@
 #!/bin/sh
 
 cd $1
-make build
+GOOS=linux CGO_ENABLED=0 go build -o ../main main.go
